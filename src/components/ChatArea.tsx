@@ -68,15 +68,6 @@ export function ChatArea({ messages, isGenerating, activeSessionId, streamingCon
                             <span style={{ opacity: 0.5 }}>
                                 {new Date(msg.timestamp).toLocaleTimeString('sv-SE')}
                             </span>
-                            {msg.role === 'assistant' && (
-                                <button
-                                    className="copy-btn"
-                                    onClick={() => handleCopy(msg.content, index)}
-                                    title="Kopiera text"
-                                >
-                                    {copiedIndex === index ? <Check size={14} color="var(--accent-green)" /> : <Copy size={14} />}
-                                </button>
-                            )}
                         </div>
                     </div>
                     <div className="message-content">
@@ -86,6 +77,21 @@ export function ChatArea({ messages, isGenerating, activeSessionId, streamingCon
                                 : msg.content}
                         </ReactMarkdown>
                     </div>
+                    {msg.role === 'assistant' && (
+                        <div className="message-footer">
+                            <button
+                                className="copy-btn"
+                                onClick={() => handleCopy(msg.content, index)}
+                                title="Kopiera text"
+                            >
+                                {copiedIndex === index ? (
+                                    <><Check size={14} color="var(--accent-green)" /> Kopierat</>
+                                ) : (
+                                    <><Copy size={14} /> Kopiera</>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
             ))
             }

@@ -19,7 +19,7 @@
   --accent-red: #ff3333;
   --scrollbar-thumb: #333333;
   --font-size: 16px;
-  --scanline-intensity: 0.03;
+  --scanline-intensity: 0.05;
   --font-terminal: 'VT323', monospace;
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
 }
@@ -921,18 +921,28 @@ body {
   animation: spin 1s linear infinite;
 }
 
+.message-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
 /* ─── Copy Button ─── */
 .copy-btn {
   background: transparent;
-  border: none;
+  border: 1px dotted var(--border-color);
   color: var(--text-color-dim);
   cursor: pointer;
-  padding: 4px;
+  padding: 4px 10px;
   display: flex;
   align-items: center;
+  gap: 6px;
   justify-content: center;
   transition: all 0.2s ease;
   border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
 }
 
 .copy-btn:hover {
