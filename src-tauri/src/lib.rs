@@ -1,16 +1,268 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
+use uuid::Uuid;
+use std::fs;
+use std::path::PathBuf;
+
+/// Get the app data directory (~/.sumrzr/)
+pub fn get_app_dir() -> PathBuf {
+    let home = dirs::home_dir().expect("Could not find home directory");
+    home.join(".sumrzr")
+}
+
+/// Ensure all app directories exist
+pub fn ensure_dirs() {
+    let app_dir = get_app_dir();
+    let dirs_to_create = [
+        app_dir.clone(),
+        app_dir.join("models"),
+        app_dir.join("sessions"),
+    ];
+    for dir in &dirs_to_create {
+        if !dir.exists() {
+            fs::create_dir_all(dir).ok();
+        }
+    }
+}
+
+// ─── Data Types ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelInfo {
+    pub name: String,
+    pub filename: String,
+    pub path: String,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionInfo {
+    pub id: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Message {
+    pub role: String, // "user" or "assistant"
+    pub content: String,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Session {
+    pub info: SessionInfo,
+    pub messages: Vec<Message>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Settings {
+    pub active_model: Option<String>,
+    pub font_size: u32,
+    pub scanline_intensity: u32,
+    pub text_color: String,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            active_model: None,
+            font_size: 16,
+            scanline_intensity: 30,
+            text_color: "#ffb000".to_string(),
+        }
+    }
+}
+
+// ─── Model Management ────────────────────────────────────
 
 #[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+fn list_models() -> Vec<ModelInfo> {
+    let models_dir = get_app_dir().join("models");
+    let mut models = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(&models_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "gguf") {
+                if let Ok(metadata) = fs::metadata(&path) {
+                    let filename = path.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                    let name = filename
+                        .trim_end_matches(".gguf")
+                        .replace('-', " ")
+                        .replace('_', " ");
+                    models.push(ModelInfo {
+                        name,
+                        filename: filename.clone(),
+                        path: path.to_string_lossy().to_string(),
+                        size_bytes: metadata.len(),
+                    });
+                }
+            }
+        }
+    }
+
+    models
 }
+
+// ─── Session Management ──────────────────────────────────
+
+fn sessions_dir() -> PathBuf {
+    get_app_dir().join("sessions")
+}
+
+fn session_file(id: &str) -> PathBuf {
+    sessions_dir().join(format!("{}.json", id))
+}
+
+#[tauri::command]
+fn list_sessions() -> Vec<SessionInfo> {
+    let dir = sessions_dir();
+    let mut sessions = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "json") {
+                if let Ok(data) = fs::read_to_string(&path) {
+                    if let Ok(session) = serde_json::from_str::<Session>(&data) {
+                        sessions.push(session.info);
+                    }
+                }
+            }
+        }
+    }
+
+    sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    sessions
+}
+
+#[tauri::command]
+fn create_session(name: String) -> Result<SessionInfo, String> {
+    ensure_dirs();
+    let now = Utc::now();
+    let info = SessionInfo {
+        id: Uuid::new_v4().to_string(),
+        name,
+        created_at: now,
+        updated_at: now,
+    };
+    let session = Session {
+        info: info.clone(),
+        messages: Vec::new(),
+    };
+    let json = serde_json::to_string_pretty(&session)
+        .map_err(|e| e.to_string())?;
+    fs::write(session_file(&info.id), json)
+        .map_err(|e| e.to_string())?;
+    Ok(info)
+}
+
+#[tauri::command]
+fn delete_session(session_id: String) -> Result<(), String> {
+    let path = session_file(&session_id);
+    if path.exists() {
+        fs::remove_file(path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn get_session_messages(session_id: String) -> Result<Vec<Message>, String> {
+    let path = session_file(&session_id);
+    let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let session: Session = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+    Ok(session.messages)
+}
+
+#[tauri::command]
+fn add_message(session_id: String, role: String, content: String) -> Result<(), String> {
+    let path = session_file(&session_id);
+    let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut session: Session = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+
+    session.messages.push(Message {
+        role,
+        content,
+        timestamp: Utc::now(),
+    });
+    session.info.updated_at = Utc::now();
+
+    let json = serde_json::to_string_pretty(&session).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn rename_session(session_id: String, new_name: String) -> Result<(), String> {
+    let path = session_file(&session_id);
+    let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut session: Session = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+
+    session.info.name = new_name;
+    session.info.updated_at = Utc::now();
+
+    let json = serde_json::to_string_pretty(&session).map_err(|e| e.to_string())?;
+    fs::write(&path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ─── Settings ────────────────────────────────────────────
+
+fn settings_file() -> PathBuf {
+    get_app_dir().join("settings.json")
+}
+
+#[tauri::command]
+fn get_settings() -> Settings {
+    let path = settings_file();
+    if let Ok(data) = fs::read_to_string(&path) {
+        serde_json::from_str(&data).unwrap_or_default()
+    } else {
+        Settings::default()
+    }
+}
+
+#[tauri::command]
+fn save_settings(settings: Settings) -> Result<(), String> {
+    ensure_dirs();
+    let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    fs::write(settings_file(), json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ─── File Attachment ─────────────────────────────────────
+
+#[tauri::command]
+fn read_text_file(file_path: String) -> Result<String, String> {
+    fs::read_to_string(&file_path).map_err(|e| format!("Kunde inte läsa filen: {}", e))
+}
+
+// ─── Tauri App Entry ─────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Ensure app directories exist on startup
+    ensure_dirs();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![
+            list_models,
+            list_sessions,
+            create_session,
+            delete_session,
+            get_session_messages,
+            add_message,
+            rename_session,
+            get_settings,
+            save_settings,
+            read_text_file,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
