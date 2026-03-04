@@ -11,14 +11,15 @@ interface ChatAreaProps {
     messages: Message[];
     isGenerating: boolean;
     activeSessionId: string | null;
+    streamingContent?: string;
 }
 
-export function ChatArea({ messages, isGenerating, activeSessionId }: ChatAreaProps) {
+export function ChatArea({ messages, isGenerating, activeSessionId, streamingContent }: ChatAreaProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isGenerating]);
+    }, [messages, isGenerating, streamingContent]);
 
     if (!activeSessionId) {
         return (
@@ -30,7 +31,7 @@ export function ChatArea({ messages, isGenerating, activeSessionId }: ChatAreaPr
                     Välj en session eller skapa en ny chatt för att börja.
                 </p>
                 <p className="hint">
-                    Placera GGUF-modeller i ~/.sumrzr/models/ och välj modell i inställningarna.
+                    Modeller laddas ned automatiskt vid första starten.
                 </p>
             </div>
         );
@@ -68,9 +69,16 @@ export function ChatArea({ messages, isGenerating, activeSessionId }: ChatAreaPr
                     <div className="message-header">
                         <span className="message-prefix">$ sumrzr</span>
                     </div>
-                    <div className="typing-indicator">
-                        <span className="cursor" />
-                    </div>
+                    {streamingContent ? (
+                        <div className="message-content">
+                            <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                            <span className="cursor" />
+                        </div>
+                    ) : (
+                        <div className="typing-indicator">
+                            <span className="cursor" />
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -78,3 +86,4 @@ export function ChatArea({ messages, isGenerating, activeSessionId }: ChatAreaPr
         </div>
     );
 }
+

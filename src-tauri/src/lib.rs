@@ -4,6 +4,9 @@ use uuid::Uuid;
 use std::fs;
 use std::path::PathBuf;
 
+mod model_download;
+mod inference;
+
 /// Get the app data directory (~/.sumrzr/)
 pub fn get_app_dir() -> PathBuf {
     let home = dirs::home_dir().expect("Could not find home directory");
@@ -107,6 +110,68 @@ fn list_models() -> Vec<ModelInfo> {
     }
 
     models
+}
+
+// ─── Model Download ──────────────────────────────────────
+
+#[tauri::command]
+fn list_available_models() -> Vec<model_download::ModelStatus> {
+    model_download::list_models_with_status()
+}
+
+#[tauri::command]
+async fn download_model_cmd(model_id: String, app: tauri::AppHandle) -> Result<String, String> {
+    model_download::download_model(model_id, app).await
+}
+
+#[tauri::command]
+fn check_default_model() -> bool {
+    model_download::get_default_model_path().is_some()
+}
+
+// ─── Inference ───────────────────────────────────────────
+
+#[tauri::command]
+fn load_model_cmd(
+    model_path: String,
+    engine: tauri::State<'_, inference::SharedEngine>,
+) -> Result<(), String> {
+    let mut eng = engine.lock().map_err(|e| format!("Lock-fel: {}", e))?;
+    eng.load_model(&model_path)
+}
+
+#[tauri::command]
+async fn chat_stream(
+    session_id: String,
+    message: String,
+    engine: tauri::State<'_, inference::SharedEngine>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    // Build a simple prompt from the message
+    // TODO: Use chat template from model for proper formatting
+    let prompt = format!(
+        "<start_of_turn>user\n{}\n<end_of_turn>\n<start_of_turn>model\n",
+        message
+    );
+
+    let engine_clone = engine.inner().clone();
+    let session_id_clone = session_id.clone();
+    let app_clone = app.clone();
+
+    // Run inference on a blocking thread to avoid blocking the async runtime
+    let result = tokio::task::spawn_blocking(move || {
+        let eng = engine_clone.lock().map_err(|e| format!("Lock-fel: {}", e))?;
+        eng.generate(&prompt, 1024, &app_clone, &session_id_clone)
+    })
+    .await
+    .map_err(|e| format!("Tokio join error: {}", e))??;
+
+    Ok(result)
+}
+
+#[tauri::command]
+fn is_model_loaded(engine: tauri::State<'_, inference::SharedEngine>) -> bool {
+    engine.lock().map(|eng| eng.is_loaded()).unwrap_or(false)
 }
 
 // ─── Session Management ──────────────────────────────────
@@ -249,18 +314,34 @@ pub fn run() {
     // Ensure app directories exist on startup
     ensure_dirs();
 
+    // Create inference engine
+    let engine = inference::create_engine()
+        .expect("Kunde inte starta inference-motor");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .manage(engine)
         .invoke_handler(tauri::generate_handler![
+            // Model management
             list_models,
+            list_available_models,
+            download_model_cmd,
+            check_default_model,
+            load_model_cmd,
+            is_model_loaded,
+            // Inference
+            chat_stream,
+            // Sessions
             list_sessions,
             create_session,
             delete_session,
             get_session_messages,
             add_message,
             rename_session,
+            // Settings
             get_settings,
             save_settings,
+            // File
             read_text_file,
         ])
         .run(tauri::generate_context!())

@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { X } from 'lucide-react';
-import { useModels } from '../hooks/useModels';
+import { useEffect, useState } from 'react';
+import { X, Download, Check, Loader } from 'lucide-react';
+import { useModels, AvailableModel } from '../hooks/useModels';
 
 interface Settings {
     active_model: string | null;
@@ -13,6 +13,7 @@ interface SettingsModalProps {
     settings: Settings;
     onUpdate: (partial: Partial<Settings>) => void;
     onClose: () => void;
+    onModelLoaded?: (path: string) => void;
 }
 
 const COLOR_PRESETS = [
@@ -23,12 +24,22 @@ const COLOR_PRESETS = [
     { color: '#ffffff', label: 'Vit' },
 ];
 
-export function SettingsModal({ settings, onUpdate, onClose }: SettingsModalProps) {
-    const { models, loadModels, formatSize } = useModels();
+export function SettingsModal({ settings, onUpdate, onClose, onModelLoaded }: SettingsModalProps) {
+    const {
+        availableModels,
+        downloading,
+        downloadPercent,
+        loadAvailableModels,
+        downloadModel,
+        loadModelIntoEngine,
+        formatSize,
+    } = useModels();
+
+    const [loadingModel, setLoadingModel] = useState<string | null>(null);
 
     useEffect(() => {
-        loadModels();
-    }, [loadModels]);
+        loadAvailableModels();
+    }, [loadAvailableModels]);
 
     // Close on Escape
     useEffect(() => {
@@ -38,6 +49,35 @@ export function SettingsModal({ settings, onUpdate, onClose }: SettingsModalProp
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [onClose]);
+
+    const handleSelectModel = async (model: AvailableModel) => {
+        if (!model.downloaded) {
+            // Download first
+            const path = await downloadModel(model.id);
+            if (path) {
+                setLoadingModel(model.id);
+                const success = await loadModelIntoEngine(path);
+                if (success) {
+                    onUpdate({ active_model: path });
+                    onModelLoaded?.(path);
+                }
+                setLoadingModel(null);
+            }
+        } else if (model.local_path) {
+            // Already downloaded, just load
+            setLoadingModel(model.id);
+            const success = await loadModelIntoEngine(model.local_path);
+            if (success) {
+                onUpdate({ active_model: model.local_path });
+                onModelLoaded?.(model.local_path);
+            }
+            setLoadingModel(null);
+        }
+    };
+
+    const isActive = (model: AvailableModel) => {
+        return settings.active_model === model.local_path;
+    };
 
     return (
         <div className="modal-overlay" onClick={(e) => {
@@ -52,35 +92,63 @@ export function SettingsModal({ settings, onUpdate, onClose }: SettingsModalProp
                 </div>
 
                 <div className="settings-body">
-                    {/* AI Model */}
+                    {/* AI Models */}
                     <div className="settings-section">
-                        <h3>AI-Modell</h3>
-                        <div className="setting-row">
-                            <label>Aktiv modell</label>
-                            <select
-                                value={settings.active_model || ''}
-                                onChange={(e) => onUpdate({ active_model: e.target.value || null })}
-                            >
-                                <option value="">Ingen modell vald</option>
-                                {models.map((model) => (
-                                    <option key={model.filename} value={model.path}>
-                                        {model.name} ({formatSize(model.size_bytes)})
-                                    </option>
-                                ))}
-                            </select>
+                        <h3>AI-Modeller</h3>
+                        <div className="model-list">
+                            {availableModels.map((model) => (
+                                <div
+                                    key={model.id}
+                                    className={`model-card ${isActive(model) ? 'active' : ''}`}
+                                >
+                                    <div className="model-info">
+                                        <div className="model-name">
+                                            {model.name}
+                                            {model.is_default && (
+                                                <span className="model-badge">Standard</span>
+                                            )}
+                                        </div>
+                                        <div className="model-desc">{model.description}</div>
+                                        <div className="model-size">{formatSize(model.size_bytes)}</div>
+                                    </div>
+                                    <div className="model-action">
+                                        {downloading === model.id ? (
+                                            <div className="download-progress">
+                                                <div className="progress-bar">
+                                                    <div
+                                                        className="progress-fill"
+                                                        style={{ width: `${downloadPercent}%` }}
+                                                    />
+                                                </div>
+                                                <span className="progress-text">{downloadPercent}%</span>
+                                            </div>
+                                        ) : loadingModel === model.id ? (
+                                            <button className="model-btn loading" disabled>
+                                                <Loader size={14} className="spin" /> Laddar...
+                                            </button>
+                                        ) : isActive(model) ? (
+                                            <button className="model-btn active" disabled>
+                                                <Check size={14} /> Aktiv
+                                            </button>
+                                        ) : model.downloaded ? (
+                                            <button
+                                                className="model-btn"
+                                                onClick={() => handleSelectModel(model)}
+                                            >
+                                                Välj
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="model-btn download"
+                                                onClick={() => handleSelectModel(model)}
+                                            >
+                                                <Download size={14} /> Ladda ner
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        {models.length === 0 && (
-                            <p style={{
-                                fontSize: '12px',
-                                color: 'var(--text-color-dim)',
-                                opacity: 0.7,
-                                marginTop: '8px',
-                            }}>
-                                Inga modeller hittades. Placera GGUF-filer i:
-                                <br />
-                                <code style={{ fontSize: '11px' }}>~/.sumrzr/models/</code>
-                            </p>
-                        )}
                     </div>
 
                     {/* Display Settings */}

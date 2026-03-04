@@ -766,3 +766,155 @@ body {
   align-items: center;
   gap: 8px;
 }
+
+/* ─── Model Cards ─── */
+.model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.model-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  transition: all 0.15s ease;
+}
+
+.model-card.active {
+  border-color: var(--text-color-dim);
+  box-shadow: 0 0 8px var(--border-glow);
+}
+
+.model-info {
+  flex: 1;
+}
+
+.model-name {
+  font-size: 14px;
+  font-family: var(--font-mono);
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--text-color-dim);
+  color: var(--bg-primary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.model-desc {
+  font-size: 11px;
+  color: var(--text-color-dim);
+  margin-top: 2px;
+}
+
+.model-size {
+  font-size: 11px;
+  color: var(--text-color-dim);
+  opacity: 0.6;
+  margin-top: 2px;
+}
+
+.model-action {
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.model-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-color);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-btn:hover:not(:disabled) {
+  border-color: var(--text-color);
+  background: var(--bg-tertiary);
+}
+
+.model-btn.active {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+  cursor: default;
+}
+
+.model-btn.download {
+  color: var(--text-color-bright);
+  border-color: var(--text-color-dim);
+}
+
+.model-btn.loading {
+  color: var(--text-color-dim);
+  cursor: wait;
+}
+
+/* ─── Progress Bar ─── */
+.progress-bar {
+  width: 120px;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--text-color);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 6px var(--text-color);
+}
+
+.download-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: var(--text-color-dim);
+  font-family: var(--font-mono);
+  min-width: 35px;
+}
+
+.first-run-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
