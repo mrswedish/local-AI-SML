@@ -19,9 +19,9 @@ pub struct ChatToken {
 use serde::Serialize;
 
 pub struct InferenceEngine {
-    backend: LlamaBackend,
-    model: Option<LlamaModel>,
     model_path: Option<String>,
+    model: Option<LlamaModel>,
+    backend: LlamaBackend,
 }
 
 // Safety: LlamaBackend and LlamaModel implement Send
