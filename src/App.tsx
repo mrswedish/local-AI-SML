@@ -86,7 +86,7 @@ function App() {
     });
 
     try {
-      const path: string = await invoke('download_model_cmd', { modelId: 'ministral-3b' });
+      const path: string = await invoke('download_model_cmd', { modelId: 'ministral-3b-q4' });
       await invoke('load_model_cmd', { modelPath: path });
       updateSettings({ active_model: path });
       setNeedsDownload(false);

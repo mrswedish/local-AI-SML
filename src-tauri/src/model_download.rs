@@ -14,6 +14,8 @@ pub struct ModelEntry {
     pub size_bytes: u64,
     pub description: String,
     pub is_default: bool,
+    /// Prompt template for this model. Use `{message}` as the placeholder.
+    pub chat_template: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +36,18 @@ pub struct DownloadProgress {
 
 pub fn model_registry() -> Vec<ModelEntry> {
     vec![
+        // Default: Ministral 3B Q4_K_M – works on machines with 4 GB+ RAM.
+        // Q8_0 (below) requires ~5 GB free RAM and causes NullResult on low-memory systems.
+        ModelEntry {
+            id: "ministral-3b-q4".to_string(),
+            name: "Ministral 3B Q4".to_string(),
+            filename: "mistralai_Ministral-3-3B-Instruct-2512-Q4_K_M.gguf".to_string(),
+            url: "https://huggingface.co/bartowski/mistralai_Ministral-3-3B-Instruct-2512-GGUF/resolve/main/mistralai_Ministral-3-3B-Instruct-2512-Q4_K_M.gguf".to_string(),
+            size_bytes: 2_100_000_000,
+            description: "Ministral 3B – Q4_K_M (~2.0 GB) – rekommenderas".to_string(),
+            is_default: true,
+            chat_template: "<s>[INST] {message} [/INST]".to_string(),
+        },
         ModelEntry {
             id: "gemma-3n-e2b".to_string(),
             name: "Gemma 3n E2B".to_string(),
@@ -42,15 +56,17 @@ pub fn model_registry() -> Vec<ModelEntry> {
             size_bytes: 1_850_000_000,
             description: "Google Gemma 3n – 2B params, Q4 (~1.7 GB)".to_string(),
             is_default: false,
+            chat_template: "<start_of_turn>user\n{message}\n<end_of_turn>\n<start_of_turn>model\n".to_string(),
         },
         ModelEntry {
             id: "ministral-3b".to_string(),
-            name: "Ministral 3B".to_string(),
+            name: "Ministral 3B Q8".to_string(),
             filename: "Ministral-3-3B-Instruct-2512-Q8_0.gguf".to_string(),
             url: "https://huggingface.co/ggml-org/Ministral-3-3B-Instruct-2512-GGUF/resolve/main/Ministral-3-3B-Instruct-2512-Q8_0.gguf".to_string(),
-            size_bytes: 3_429_006_336,
-            description: "Mistral 3B – Q8 (~3.2 GB)".to_string(),
-            is_default: true,
+            size_bytes: 3_651_679_744,
+            description: "Ministral 3B – Q8_0 (~3.4 GB) – kräver 5+ GB ledigt RAM".to_string(),
+            is_default: false,
+            chat_template: "<s>[INST] {message} [/INST]".to_string(),
         },
     ]
 }

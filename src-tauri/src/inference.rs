@@ -94,6 +94,10 @@ impl InferenceEngine {
         self.model.is_some()
     }
 
+    pub fn model_path(&self) -> Option<&str> {
+        self.model_path.as_deref()
+    }
+
     pub fn generate(
         &self,
         prompt: &str,

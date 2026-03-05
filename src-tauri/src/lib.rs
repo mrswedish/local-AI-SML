@@ -170,8 +170,22 @@ async fn chat_stream(
     engine: tauri::State<'_, inference::SharedEngine>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    // Mistral/Ministral instruct format: <s>[INST] message [/INST]
-    let prompt = format!("<s>[INST] {} [/INST]", message);
+    // Look up the chat template for the currently loaded model.
+    // Different model families require different prompt formats.
+    let loaded_filename = {
+        let eng = engine.lock().map_err(|e| format!("Lock-fel: {}", e))?;
+        eng.model_path().and_then(|p| {
+            std::path::Path::new(p)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+        })
+    };
+    let template = model_download::model_registry()
+        .into_iter()
+        .find(|e| loaded_filename.as_deref() == Some(e.filename.as_str()))
+        .map(|e| e.chat_template)
+        .unwrap_or_else(|| "<s>[INST] {message} [/INST]".to_string());
+    let prompt = template.replace("{message}", &message);
 
     let engine_clone = engine.inner().clone();
     let session_id_clone = session_id.clone();
