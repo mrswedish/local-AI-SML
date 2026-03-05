@@ -170,12 +170,8 @@ async fn chat_stream(
     engine: tauri::State<'_, inference::SharedEngine>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    // Build a simple prompt from the message
-    // TODO: Use chat template from model for proper formatting
-    let prompt = format!(
-        "<start_of_turn>user\n{}\n<end_of_turn>\n<start_of_turn>model\n",
-        message
-    );
+    // Mistral/Ministral instruct format: <s>[INST] message [/INST]
+    let prompt = format!("<s>[INST] {} [/INST]", message);
 
     let engine_clone = engine.inner().clone();
     let session_id_clone = session_id.clone();

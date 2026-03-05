@@ -57,75 +57,33 @@ impl InferenceEngine {
             params = params.with_n_gpu_layers(1000); // Offload allt till GPU
         }
 
-        let path_obj = Path::new(path);
-        
-        // --- DEBUG LOGGING FÖR WINDOWS ---
-        let desktop_path = dirs::desktop_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
-        let log_file = desktop_path.join("loke_debug_log.txt");
-        
-        let file_size = std::fs::metadata(&path_obj).map(|m| m.len()).unwrap_or(0);
-        let mut log_msgs = vec![
-            format!("=== LADDAR MODELL ==="),
-            format!("Path_str: {}", path),
-            format!("Path exists: {}", path_obj.exists()),
-            format!("Path is_file: {}", path_obj.is_file()),
-            format!("File size: {} bytes", file_size),
-        ];
-
-        // 1. Verify Rust can actually read the file natively (Checks for Windows Defender locks)
-        match std::fs::File::open(&path_obj) {
-            Ok(mut f) => {
-                use std::io::Read;
-                let mut magic = [0u8; 4];
-                if let Err(e) = f.read_exact(&mut magic) {
-                    log_msgs.push(format!("Kunde inte läsa GGUF-hörfilen: {}", e));
-                    return Err(format!("Kunde inte läsa GGUF-hörfilen: {}", e));
-                }
-                log_msgs.push(format!("Magic bytes: {:?}", magic));
-                log_msgs.push(format!("Magic bytes som string: {:?}", String::from_utf8_lossy(&magic)));
-                // Check for GGUF magic standard
-                if &magic != b"GGUF" {
-                    log_msgs.push(format!("VARNING: Filen är inte GGUF!"));
-                }
-            }
-            Err(e) => {
-                return Err(format!("Rust OS Fel: Filen kan inte öppnas av operativsystemet (förmodligen låst av Windows Defender eller fel sökväg): {:?}", e));
-            }
+        // On Windows, C-layer fopen() uses the ANSI code page and cannot open paths that
+        // contain non-ASCII characters (e.g. Å, Ä, Ö in a username). Rust's own fs APIs
+        // use wide-char Windows APIs and work fine, so we detect the mismatch early.
+        #[cfg(target_os = "windows")]
+        if !path.is_ascii() {
+            return Err(
+                "Modellsökvägen innehåller icke-ASCII-tecken (t.ex. Å, Ä, Ö). \
+                 Flytta modellmappen till en sökväg med enbart ASCII-tecken, \
+                 exempelvis C:\\Loke\\models\\, och ladda om appen.".to_string()
+            );
         }
 
-        // 2. Format path safely for C++
-        // `llama.cpp` fopen sometimes struggles with standard `\` paths on Windows if they get double-escaped.
-        // Forward slashes `/` are universally accepted by Windows APIs and perfectly safe for C++.
-        let safe_path_str = path.replace("\\", "/");
+        // Forward slashes are universally accepted by Windows APIs and by llama.cpp's fopen.
+        let safe_path_str = path.replace('\\', "/");
         let safe_path = Path::new(&safe_path_str);
 
         // First attempt: with GPU layers
         let mut model_res = LlamaModel::load_from_file(&self.backend, safe_path, &params);
 
-            
-            log_msgs.push(format!("GPU res is_err: {}", model_res.is_err()));
-            // Fallback: If GPU load fails (often happens with Vulkan driver/memory issues returning NullResult), retry on CPU
-            if let Err(e) = &model_res {
-                println!("GPU model load failed or returned NullResult. Retrying purely on CPU...");
-                log_msgs.push(format!("GPU Error: {:?}", e));
-                
-                let cpu_params = LlamaModelParams::default().with_n_gpu_layers(0);
-                model_res = LlamaModel::load_from_file(&self.backend, safe_path, &cpu_params);
-                
-                if let Err(cpu_e) = &model_res {
-                    log_msgs.push(format!("CPU Error: {:?}", cpu_e));
-                } else {
-                    log_msgs.push(format!("CPU load succeeded!"));
-                }
-            } else {
-                log_msgs.push(format!("GPU load succeeded!"));
-            }
+        // Fallback: If GPU load fails (Vulkan driver/memory issues), retry on CPU
+        if model_res.is_err() {
+            let cpu_params = LlamaModelParams::default().with_n_gpu_layers(0);
+            model_res = LlamaModel::load_from_file(&self.backend, safe_path, &cpu_params);
+        }
 
-            let final_log = log_msgs.join("\n");
-            let _ = std::fs::write(&log_file, final_log);
-
-            let model = model_res
-                .map_err(|e| format!("Kunde inte ladda modell från '{}': {:?}", path, e))?;
+        let model = model_res
+            .map_err(|e| format!("Kunde inte ladda modell från '{}': {:?}", path, e))?;
 
         self.model = Some(model);
         self.model_path = Some(path.to_string());
