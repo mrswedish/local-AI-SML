@@ -57,14 +57,40 @@ impl InferenceEngine {
             params = params.with_n_gpu_layers(1000); // Offload allt till GPU
         }
 
+        let path_obj = Path::new(path);
+
+        // 1. Verify Rust can actually read the file natively (Checks for Windows Defender locks)
+        match std::fs::File::open(&path_obj) {
+            Ok(mut f) => {
+                use std::io::Read;
+                let mut magic = [0u8; 4];
+                if let Err(e) = f.read_exact(&mut magic) {
+                    return Err(format!("Kunde inte läsa GGUF-hörfilen: {}", e));
+                }
+                // Check for GGUF magic standard
+                if &magic != b"GGUF" {
+                    println!("Varning: Filen verkar inte vara en giltig GGUF-fil. Magic: {:?}", magic);
+                }
+            }
+            Err(e) => {
+                return Err(format!("Rust OS Fel: Filen kan inte öppnas av operativsystemet (förmodligen låst av Windows Defender eller fel sökväg): {:?}", e));
+            }
+        }
+
+        // 2. Format path safely for C++
+        // `llama.cpp` fopen sometimes struggles with standard `\` paths on Windows if they get double-escaped.
+        // Forward slashes `/` are universally accepted by Windows APIs and perfectly safe for C++.
+        let safe_path_str = path.replace("\\", "/");
+        let safe_path = Path::new(&safe_path_str);
+
         // First attempt: with GPU layers
-        let mut model_res = LlamaModel::load_from_file(&self.backend, Path::new(path), &params);
+        let mut model_res = LlamaModel::load_from_file(&self.backend, safe_path, &params);
 
         // Fallback: If GPU load fails (often happens with Vulkan driver/memory issues returning NullResult), retry on CPU
         if model_res.is_err() {
             println!("GPU model load failed or returned NullResult. Retrying purely on CPU...");
             let cpu_params = LlamaModelParams::default().with_n_gpu_layers(0);
-            model_res = LlamaModel::load_from_file(&self.backend, Path::new(path), &cpu_params);
+            model_res = LlamaModel::load_from_file(&self.backend, safe_path, &cpu_params);
         }
 
         let model = model_res
