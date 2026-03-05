@@ -7,15 +7,16 @@ use std::path::PathBuf;
 mod model_download;
 mod inference;
 
-/// Get the app data directory (~/.loke/)
-pub fn get_app_dir() -> PathBuf {
-    let home = dirs::home_dir().expect("Could not find home directory");
-    home.join(".loke")
+use tauri::Manager;
+
+/// Get the app data directory
+pub fn get_app_dir(app: &tauri::AppHandle) -> PathBuf {
+    app.path().app_data_dir().expect("Could not find app_data directory")
 }
 
 /// Ensure all app directories exist
-pub fn ensure_dirs() {
-    let app_dir = get_app_dir();
+pub fn ensure_dirs(app: &tauri::AppHandle) {
+    let app_dir = get_app_dir(app);
     let dirs_to_create = [
         app_dir.clone(),
         app_dir.join("models"),
@@ -81,8 +82,8 @@ impl Default for Settings {
 // ─── Model Management ────────────────────────────────────
 
 #[tauri::command]
-fn list_models() -> Vec<ModelInfo> {
-    let models_dir = get_app_dir().join("models");
+fn list_models(app: tauri::AppHandle) -> Vec<ModelInfo> {
+    let models_dir = get_app_dir(&app).join("models");
     let mut models = Vec::new();
 
     if let Ok(entries) = fs::read_dir(&models_dir) {
@@ -115,8 +116,8 @@ fn list_models() -> Vec<ModelInfo> {
 // ─── Model Download ──────────────────────────────────────
 
 #[tauri::command]
-fn list_available_models() -> Vec<model_download::ModelStatus> {
-    model_download::list_models_with_status()
+fn list_available_models(app: tauri::AppHandle) -> Vec<model_download::ModelStatus> {
+    model_download::list_models_with_status(&app)
 }
 
 #[tauri::command]
@@ -125,13 +126,13 @@ async fn download_model_cmd(model_id: String, app: tauri::AppHandle) -> Result<S
 }
 
 #[tauri::command]
-fn check_default_model() -> bool {
-    model_download::get_default_model_path().is_some()
+fn check_default_model(app: tauri::AppHandle) -> bool {
+    model_download::get_default_model_path(&app).is_some()
 }
 
 #[tauri::command]
-fn delete_model_cmd(model_id: String) -> Result<(), String> {
-    let models_dir = get_app_dir().join("models");
+fn delete_model_cmd(model_id: String, app: tauri::AppHandle) -> Result<(), String> {
+    let models_dir = get_app_dir(&app).join("models");
     let entry = model_download::model_registry()
         .into_iter()
         .find(|e| e.id == model_id)
@@ -198,17 +199,17 @@ fn is_model_loaded(engine: tauri::State<'_, inference::SharedEngine>) -> bool {
 
 // ─── Session Management ──────────────────────────────────
 
-fn sessions_dir() -> PathBuf {
-    get_app_dir().join("sessions")
+fn sessions_dir(app: &tauri::AppHandle) -> PathBuf {
+    get_app_dir(app).join("sessions")
 }
 
-fn session_file(id: &str) -> PathBuf {
-    sessions_dir().join(format!("{}.json", id))
+fn session_file(id: &str, app: &tauri::AppHandle) -> PathBuf {
+    sessions_dir(app).join(format!("{}.json", id))
 }
 
 #[tauri::command]
-fn list_sessions() -> Vec<SessionInfo> {
-    let dir = sessions_dir();
+fn list_sessions(app: tauri::AppHandle) -> Vec<SessionInfo> {
+    let dir = sessions_dir(&app);
     let mut sessions = Vec::new();
 
     if let Ok(entries) = fs::read_dir(&dir) {
@@ -229,8 +230,8 @@ fn list_sessions() -> Vec<SessionInfo> {
 }
 
 #[tauri::command]
-fn create_session(name: String) -> Result<SessionInfo, String> {
-    ensure_dirs();
+fn create_session(name: String, app: tauri::AppHandle) -> Result<SessionInfo, String> {
+    ensure_dirs(&app);
     let now = Utc::now();
     let info = SessionInfo {
         id: Uuid::new_v4().to_string(),
@@ -244,14 +245,14 @@ fn create_session(name: String) -> Result<SessionInfo, String> {
     };
     let json = serde_json::to_string_pretty(&session)
         .map_err(|e| e.to_string())?;
-    fs::write(session_file(&info.id), json)
+    fs::write(session_file(&info.id, &app), json)
         .map_err(|e| e.to_string())?;
     Ok(info)
 }
 
 #[tauri::command]
-fn delete_session(session_id: String) -> Result<(), String> {
-    let path = session_file(&session_id);
+fn delete_session(session_id: String, app: tauri::AppHandle) -> Result<(), String> {
+    let path = session_file(&session_id, &app);
     if path.exists() {
         fs::remove_file(path).map_err(|e| e.to_string())?;
     }
@@ -259,16 +260,16 @@ fn delete_session(session_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_session_messages(session_id: String) -> Result<Vec<Message>, String> {
-    let path = session_file(&session_id);
+fn get_session_messages(session_id: String, app: tauri::AppHandle) -> Result<Vec<Message>, String> {
+    let path = session_file(&session_id, &app);
     let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let session: Session = serde_json::from_str(&data).map_err(|e| e.to_string())?;
     Ok(session.messages)
 }
 
 #[tauri::command]
-fn add_message(session_id: String, role: String, content: String) -> Result<(), String> {
-    let path = session_file(&session_id);
+fn add_message(session_id: String, role: String, content: String, app: tauri::AppHandle) -> Result<(), String> {
+    let path = session_file(&session_id, &app);
     let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let mut session: Session = serde_json::from_str(&data).map_err(|e| e.to_string())?;
 
@@ -285,8 +286,8 @@ fn add_message(session_id: String, role: String, content: String) -> Result<(), 
 }
 
 #[tauri::command]
-fn rename_session(session_id: String, new_name: String) -> Result<(), String> {
-    let path = session_file(&session_id);
+fn rename_session(session_id: String, new_name: String, app: tauri::AppHandle) -> Result<(), String> {
+    let path = session_file(&session_id, &app);
     let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let mut session: Session = serde_json::from_str(&data).map_err(|e| e.to_string())?;
 
@@ -300,13 +301,13 @@ fn rename_session(session_id: String, new_name: String) -> Result<(), String> {
 
 // ─── Settings ────────────────────────────────────────────
 
-fn settings_file() -> PathBuf {
-    get_app_dir().join("settings.json")
+fn settings_file(app: &tauri::AppHandle) -> PathBuf {
+    get_app_dir(app).join("settings.json")
 }
 
 #[tauri::command]
-fn get_settings() -> Settings {
-    let path = settings_file();
+fn get_settings(app: tauri::AppHandle) -> Settings {
+    let path = settings_file(&app);
     if let Ok(data) = fs::read_to_string(&path) {
         serde_json::from_str(&data).unwrap_or_default()
     } else {
@@ -315,10 +316,10 @@ fn get_settings() -> Settings {
 }
 
 #[tauri::command]
-fn save_settings(settings: Settings) -> Result<(), String> {
-    ensure_dirs();
+fn save_settings(settings: Settings, app: tauri::AppHandle) -> Result<(), String> {
+    ensure_dirs(&app);
     let json = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    fs::write(settings_file(), json).map_err(|e| e.to_string())?;
+    fs::write(settings_file(&app), json).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -333,15 +334,15 @@ fn read_text_file(file_path: String) -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Ensure app directories exist on startup
-    ensure_dirs();
-
-    // Create inference engine
     let engine = inference::create_engine()
         .expect("Kunde inte starta inference-motor");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            ensure_dirs(app.handle());
+            Ok(())
+        })
         .manage(engine)
         .invoke_handler(tauri::generate_handler![
             // Model management

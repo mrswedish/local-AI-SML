@@ -126,6 +126,39 @@ jobs:
           files: |
             Loke-portable.exe
 
+      - name: Copy Setup Executable
+        env:
+          CARGO_TARGET_DIR: D:\t
+        run: |
+          $targetPath = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { "src-tauri/target" }
+          $setupPaths = @(
+            "$targetPath/release/bundle/nsis",
+            "$targetPath/x86_64-pc-windows-msvc/release/bundle/nsis"
+          )
+          
+          $found = $false
+          foreach ($p in $setupPaths) {
+            if (Test-Path $p) {
+              $setupExe = Get-ChildItem -Path $p -Filter "*setup.exe" | Select-Object -First 1
+              if ($setupExe) {
+                Copy-Item -Path $setupExe.FullName -Destination "Loke-setup.exe"
+                $found = $true
+                break
+              }
+            }
+          }
+          
+          if (-not $found) {
+            Write-Warning "Could not find the NSIS setup executable."
+          }
+
+      - name: Upload Setup Executable
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            Loke-setup.exe
+
       - name: Build CPU-Only Diagnostic App
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

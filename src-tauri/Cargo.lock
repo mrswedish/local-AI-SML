@@ -2165,6 +2165,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897"
 
 [[package]]
+name = "loke"
+version = "0.1.2"
+dependencies = [
+ "chrono",
+ "dirs 5.0.1",
+ "futures-util",
+ "llama-cpp-2",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "mac"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3813,24 +3831,6 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
-
-[[package]]
-name = "sumrzr"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "dirs 5.0.1",
- "futures-util",
- "llama-cpp-2",
- "reqwest",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tokio",
- "uuid",
-]
 
 [[package]]
 name = "swift-rs"

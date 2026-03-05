@@ -55,12 +55,12 @@ pub fn model_registry() -> Vec<ModelEntry> {
     ]
 }
 
-fn models_dir() -> PathBuf {
-    crate::get_app_dir().join("models")
+fn models_dir(app: &tauri::AppHandle) -> PathBuf {
+    crate::get_app_dir(app).join("models")
 }
 
-pub fn list_models_with_status() -> Vec<ModelStatus> {
-    let dir = models_dir();
+pub fn list_models_with_status(app: &tauri::AppHandle) -> Vec<ModelStatus> {
+    let dir = models_dir(app);
     model_registry()
         .into_iter()
         .map(|entry| {
@@ -86,8 +86,8 @@ pub fn list_models_with_status() -> Vec<ModelStatus> {
         .collect()
 }
 
-pub fn get_default_model_path() -> Option<String> {
-    let dir = models_dir();
+pub fn get_default_model_path(app: &tauri::AppHandle) -> Option<String> {
+    let dir = models_dir(app);
     model_registry()
         .into_iter()
         .find(|e| e.is_default)
@@ -112,7 +112,7 @@ pub async fn download_model(model_id: String, app: AppHandle) -> Result<String, 
         .find(|e| e.id == model_id)
         .ok_or_else(|| format!("Okänd modell: {}", model_id))?;
 
-    let dir = models_dir();
+    let dir = models_dir(&app);
     fs::create_dir_all(&dir).map_err(|e| format!("Kunde inte skapa katalog: {}", e))?;
 
     let dest = dir.join(&entry.filename);
