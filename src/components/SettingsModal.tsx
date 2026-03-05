@@ -77,7 +77,7 @@ export function SettingsModal({ settings, onUpdate, onClose, onModelLoaded }: Se
     };
 
     const isActive = (model: AvailableModel) => {
-        return settings.active_model === model.local_path;
+        return Boolean(settings.active_model) && settings.active_model === model.local_path;
     };
 
     return (

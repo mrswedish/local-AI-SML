@@ -83,7 +83,7 @@ function App() {
     });
 
     try {
-      const path: string = await invoke('download_model_cmd', { modelId: 'gemma-3n-e2b' });
+      const path: string = await invoke('download_model_cmd', { modelId: 'ministral-3b' });
       await invoke('load_model_cmd', { modelPath: path });
       updateSettings({ active_model: path });
       setNeedsDownload(false);
@@ -163,7 +163,7 @@ function App() {
         {isDownloading ? (
           <>
             <p style={{ color: 'var(--text-color)', fontSize: '16px' }}>
-              Laddar ner Gemma 3n E2B...
+              Laddar ner Ministral 3B...
             </p>
             <div className="first-run-progress">
               <div className="progress-bar" style={{ width: '300px', height: '8px' }}>
@@ -173,7 +173,7 @@ function App() {
                 />
               </div>
               <span style={{ color: 'var(--text-color-dim)', fontSize: '14px' }}>
-                {downloadPercent}% (~1.7 GB)
+                {downloadPercent}% (~3.2 GB)
               </span>
             </div>
           </>
@@ -195,7 +195,7 @@ function App() {
               onClick={handleFirstRunDownload}
             >
               <Download size={18} />
-              Ladda ner Gemma 3n E2B (~1.7 GB)
+              Ladda ner Ministral 3B (~3.2 GB)
             </button>
             <p style={{
               color: 'var(--text-color-dim)',
