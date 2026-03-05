@@ -65,6 +65,9 @@ jobs:
           version: 1.4.309.0
           cache: true
 
+      - name: Install Ninja
+        run: choco install ninja
+
       - name: Install Frontend Dependencies
         run: npm install
 
@@ -72,12 +75,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WHISPER_NO_AVX2: 1
-          WHISPER_NO_FMA: 1
-          WHISPER_NO_F16C: 1
-          LLAMA_NO_AVX2: 1
-          LLAMA_NO_FMA: 1
-          LLAMA_NO_F16C: 1
+          CMAKE_GENERATOR: Ninja
+          CARGO_TARGET_DIR: D:\t
+          RUSTFLAGS: -C target-feature=+crt-static
+          CFLAGS: /MT
+          CXXFLAGS: /MT
+          CMAKE_POLICY_DEFAULT_CMP0091: NEW
+          CMAKE_MSVC_RUNTIME_LIBRARY: MultiThreaded
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Sumrzr ${{ github.ref_name }}'
