@@ -136,7 +136,7 @@ jobs:
           CXXFLAGS: /MT
           CMAKE_POLICY_DEFAULT_CMP0091: NEW
           CMAKE_MSVC_RUNTIME_LIBRARY: MultiThreaded
-        run: npm run tauri build -- --no-default-features
+        run: npm run tauri build -- -- --no-default-features
 
       - name: Copy CPU Executable
         run: |
