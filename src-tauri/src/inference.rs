@@ -167,8 +167,11 @@ impl InferenceEngine {
             params = params.with_n_gpu_layers(1000); // Offload allt till GPU
         }
 
+        // Log whether our unsafe write actually took effect (will be added to log_msgs below)
+        let mmap_check = format!("params.use_mmap() after set: {}", params.use_mmap());
+
         let path_obj = Path::new(path);
-        
+
         // --- DEBUG LOGGING FÖR WINDOWS ---
         let desktop_path = dirs::desktop_dir().unwrap_or_else(|| std::path::PathBuf::from("C:\\"));
         let log_file = desktop_path.join("loke_debug_log.txt");
@@ -180,6 +183,7 @@ impl InferenceEngine {
             format!("Path exists: {}", path_obj.exists()),
             format!("Path is_file: {}", path_obj.is_file()),
             format!("File size: {} bytes", file_size),
+            mmap_check,
         ];
 
         // 1. Verify Rust can actually read the file natively (Checks for Windows Defender locks)
@@ -208,6 +212,18 @@ impl InferenceEngine {
         let safe_path_str = to_llama_safe_path(path);
         log_msgs.push(format!("Safe path for llama.cpp: {}", safe_path_str));
         let safe_path = Path::new(&safe_path_str);
+
+        // Diagnostic: try vocab_only load – loads just the tokeniser, not the weights.
+        // If this succeeds but full load fails → issue is with weight loading (memory/GPU).
+        // If this also fails → llama.cpp can't even open the file.
+        {
+            let vocab_params = LlamaModelParams::default().with_vocab_only(true);
+            let vocab_res = LlamaModel::load_from_file(&self.backend, safe_path, &vocab_params);
+            log_msgs.push(format!(
+                "vocab_only test: {}",
+                if vocab_res.is_ok() { "OK – llama.cpp can open the file" } else { "FAIL – llama.cpp cannot open the file at all" }
+            ));
+        }
 
         // First attempt: with GPU layers.
         // Capture llama.cpp's own stderr so it ends up in the debug log.
