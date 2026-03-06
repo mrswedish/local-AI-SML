@@ -56,6 +56,56 @@ fn to_llama_safe_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
+/// Redirects the C runtime's stderr (fd 2) to `capture_path` for the duration of `f`,
+/// then restores it. Returns the result of `f` and the captured text.
+/// This lets us see what llama.cpp prints when it fails.
+#[cfg(target_os = "windows")]
+fn with_captured_stderr<F: FnOnce() -> R, R>(capture_path: &std::path::Path, f: F) -> (R, String) {
+    extern "C" {
+        fn _dup(fd: i32) -> i32;
+        fn _dup2(fd1: i32, fd2: i32) -> i32;
+        fn _close(fd: i32) -> i32;
+        fn _open_osfhandle(osfhandle: isize, flags: i32) -> i32;
+        fn _flushall() -> i32;
+    }
+
+    let file = match std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(capture_path)
+    {
+        Ok(f) => f,
+        Err(_) => return (f(), String::new()),
+    };
+
+    use std::os::windows::io::IntoRawHandle;
+    let handle = file.into_raw_handle();
+    // _O_WRONLY | _O_TEXT = 0x0001 | 0x4000
+    let new_fd = unsafe { _open_osfhandle(handle as isize, 0x4001) };
+    if new_fd < 0 {
+        return (f(), String::new());
+    }
+
+    let saved = unsafe { _dup(2) };
+    unsafe {
+        _flushall();
+        _dup2(new_fd, 2);
+        _close(new_fd);
+    }
+
+    let result = f();
+
+    unsafe {
+        _flushall();
+        _dup2(saved, 2);
+        _close(saved);
+    }
+
+    let captured = std::fs::read_to_string(capture_path).unwrap_or_default();
+    (result, captured)
+}
+
 #[derive(Clone, Serialize)]
 pub struct ChatToken {
     pub session_id: String,
@@ -146,27 +196,47 @@ impl InferenceEngine {
         log_msgs.push(format!("Safe path for llama.cpp: {}", safe_path_str));
         let safe_path = Path::new(&safe_path_str);
 
-        // First attempt: with GPU layers
+        // First attempt: with GPU layers.
+        // Capture llama.cpp's own stderr so it ends up in the debug log.
+        #[cfg(target_os = "windows")]
+        let stderr_file = desktop_path.join("loke_llama_stderr.txt");
+
+        #[cfg(target_os = "windows")]
+        let (mut model_res, gpu_stderr) = with_captured_stderr(&stderr_file, || {
+            LlamaModel::load_from_file(&self.backend, safe_path, &params)
+        });
+        #[cfg(not(target_os = "windows"))]
         let mut model_res = LlamaModel::load_from_file(&self.backend, safe_path, &params);
 
-            
-            log_msgs.push(format!("GPU res is_err: {}", model_res.is_err()));
-            // Fallback: If GPU load fails (often happens with Vulkan driver/memory issues returning NullResult), retry on CPU
-            if let Err(e) = &model_res {
-                println!("GPU model load failed or returned NullResult. Retrying purely on CPU...");
-                log_msgs.push(format!("GPU Error: {:?}", e));
-                
-                let cpu_params = LlamaModelParams::default().with_n_gpu_layers(0);
-                model_res = LlamaModel::load_from_file(&self.backend, safe_path, &cpu_params);
-                
-                if let Err(cpu_e) = &model_res {
-                    log_msgs.push(format!("CPU Error: {:?}", cpu_e));
-                } else {
-                    log_msgs.push(format!("CPU load succeeded!"));
-                }
+        #[cfg(target_os = "windows")]
+        log_msgs.push(format!("llama.cpp GPU stderr:\n{}", gpu_stderr.trim()));
+
+        log_msgs.push(format!("GPU res is_err: {}", model_res.is_err()));
+        // Fallback: If GPU load fails, retry on CPU
+        if let Err(e) = &model_res {
+            log_msgs.push(format!("GPU Error: {:?}", e));
+
+            let cpu_params = LlamaModelParams::default().with_n_gpu_layers(0);
+
+            #[cfg(target_os = "windows")]
+            let (cpu_res, cpu_stderr) = with_captured_stderr(&stderr_file, || {
+                LlamaModel::load_from_file(&self.backend, safe_path, &cpu_params)
+            });
+            #[cfg(not(target_os = "windows"))]
+            let cpu_res = LlamaModel::load_from_file(&self.backend, safe_path, &cpu_params);
+
+            #[cfg(target_os = "windows")]
+            log_msgs.push(format!("llama.cpp CPU stderr:\n{}", cpu_stderr.trim()));
+
+            if let Err(cpu_e) = &cpu_res {
+                log_msgs.push(format!("CPU Error: {:?}", cpu_e));
             } else {
-                log_msgs.push(format!("GPU load succeeded!"));
+                log_msgs.push(format!("CPU load succeeded!"));
             }
+            model_res = cpu_res;
+        } else {
+            log_msgs.push(format!("GPU load succeeded!"));
+        }
 
             let final_log = log_msgs.join("\n");
             let _ = std::fs::write(&log_file, final_log);
