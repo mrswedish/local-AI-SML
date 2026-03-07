@@ -4,9 +4,9 @@
   "version": "0.1.38",
   "identifier": "com.loke.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm --prefix webui run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm --prefix webui run build",
     "frontendDist": "../dist"
   },
   "app": {
