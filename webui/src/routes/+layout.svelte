@@ -20,7 +20,7 @@
 	import { getServerBase, isTauriEnv } from '$lib/server-url';
 	import { fetchServerUrl } from '$lib/tauri-bridge';
 	import TauriModelSelector from '$lib/components/app/TauriModelSelector.svelte';
-	import { KeyboardKey } from '$lib/enums';
+	import { KeyboardKey, ColorMode } from '$lib/enums';
 	import { IsMobile } from '$lib/hooks/is-mobile.svelte';
 
 	let { children } = $props();
@@ -207,6 +207,16 @@
 				.catch((e) => {
 					console.error('Error checking API key:', e);
 				});
+		}
+	});
+
+	// Apply/remove retro class when theme changes
+	$effect(() => {
+		if (!browser) return;
+		if (config().theme === ColorMode.RETRO) {
+			document.documentElement.classList.add('retro');
+		} else {
+			document.documentElement.classList.remove('retro');
 		}
 	});
 

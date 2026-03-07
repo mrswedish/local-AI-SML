@@ -278,10 +278,19 @@
 		}
 	});
 
+	function applyTheme(theme: string) {
+		if (theme === ColorMode.RETRO) {
+			setMode(ColorMode.DARK);
+			document.documentElement.classList.add('retro');
+		} else {
+			document.documentElement.classList.remove('retro');
+			setMode(theme as ColorMode);
+		}
+	}
+
 	function handleThemeChange(newTheme: string) {
 		localConfig.theme = newTheme;
-
-		setMode(newTheme as ColorMode);
+		applyTheme(newTheme);
 	}
 
 	function handleConfigChange(key: string, value: string | boolean) {
@@ -290,8 +299,7 @@
 
 	function handleReset() {
 		localConfig = { ...config() };
-
-		setMode(localConfig.theme as ColorMode);
+		applyTheme(localConfig.theme as string);
 	}
 
 	function handleSave() {
