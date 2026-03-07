@@ -1,6 +1,6 @@
 {
   "name": "loke",
-  "version": "0.1.38",
+  "version": "2.1.1",
   "private": true,
   "scripts": {
     "dev": "tauri dev",
